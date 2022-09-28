@@ -11,7 +11,7 @@ function reloadSystemd() {
 }
 
 SPATH=$(dirname "$0") # Path to the script
-REMOTE_URL=https://raw.githubusercontent.com/jacklul/pihole-updatelists # Remote URL that serves raw files from the repository
+REMOTE_URL=https://raw.githubusercontent.com/milindpatel63/pihole-updatelists # Remote URL that serves raw files from the repository
 GIT_BRANCH=master # Git branch to use, user can specify custom branch as first argument
 SYSTEMD=`pidof systemd >/dev/null && echo "1" || echo "0"` # Is systemd available?
 SYSTEMD_INSTALLED=`[ -f "/etc/systemd/system/pihole-updatelists.timer" ] && echo "1" || echo "0"` # Is systemd timer installed already?
@@ -78,8 +78,8 @@ if \
 	cp -v $SPATH/pihole-updatelists.php /usr/local/sbin/pihole-updatelists && \
 	chmod -v +x /usr/local/sbin/pihole-updatelists
 	
-	if [ ! -f "/etc/pihole-updatelists.conf" ]; then
-		cp -v $SPATH/pihole-updatelists.conf /etc/pihole-updatelists.conf
+	if [ ! -f "/etc/pihole/pihole-updatelists.conf" ]; then
+		cp -v $SPATH/pihole-updatelists.conf /etc/pihole/pihole-updatelists.conf
 	fi
 
 	if [ "$SYSTEMD" == 1 ]; then
@@ -108,8 +108,8 @@ elif [ "$REMOTE_URL" != "" ] && [ "$GIT_BRANCH" != "" ]; then
 		chmod -v +x /usr/local/sbin/pihole-updatelists
 	fi
 
-	if [ ! -f "/etc/pihole-updatelists.conf" ]; then
-		wget -nv -O /etc/pihole-updatelists.conf "$REMOTE_URL/$GIT_BRANCH/pihole-updatelists.conf"
+	if [ ! -f "/etc/pihole/pihole-updatelists.conf" ]; then
+		wget -nv -O /etc/pihole/pihole-updatelists.conf "$REMOTE_URL/$GIT_BRANCH/pihole-updatelists.conf"
 	fi
 
 	if [ "$SYSTEMD" == 1 ]; then
@@ -141,7 +141,7 @@ else
 		echo "# Pi-hole's Lists Updater by Jack'lul
 # https://github.com/jacklul/pihole-updatelists
 
-#30 3 * * 6   root   /usr/local/sbin/pihole-updatelists
+#33 3 * * 6   root   /usr/bin/runitor -uuid=\"6c4e7360-c523-4e3a-859f-04db7c1b9d3d\" -api-url=\"https://hc-ping.com\" -api-retries=5 -api-timeout=\"10s\" -- /usr/local/sbin/pihole-updatelists
 " > /etc/cron.d/pihole-updatelists
 		sed "s/#30 /$((1 + RANDOM % 58)) /" -i /etc/cron.d/pihole-updatelists
 
@@ -170,11 +170,13 @@ if [ \"\${PH_VERBOSE:-0}\" -gt 0 ]; then
 fi
 
 if [ ! -f \"/etc/pihole-updatelists/pihole-updatelists.conf\" ]; then
-	cp -v /etc/pihole-updatelists.conf /etc/pihole-updatelists/pihole-updatelists.conf
+	cp -v /etc/pihole/pihole-updatelists.conf /etc/pihole-updatelists/pihole-updatelists.conf
 fi
 
 chown -v root:root /etc/pihole-updatelists/*
+chown -v root:root /etc/pihole/pihole-updatelists.conf
 chmod -v 644 /etc/pihole-updatelists/*
+chmod -v 644 /etc/pihole/pihole-updatelists.conf
 
 if [ ! -z \"\${SKIPGRAVITYONBOOT}\" ]; then
 	echo \"Lists update skipped - SKIPGRAVITYONBOOT=true\"
@@ -191,6 +193,6 @@ fi
 	echo "" > /etc/s6-overlay/s6-rc.d/_gravityonboot/dependencies.d/_updatelistsonboot
 	echo "Added dependency to _gravityonboot service (/etc/s6-overlay/s6-rc.d/_gravityonboot/dependencies.d/_updatelistsonboot)!"
 
-	sed "s_/usr/local/sbin/pihole-updatelists_/usr/local/sbin/pihole-updatelists --config=/etc/pihole-updatelists/pihole-updatelists.conf_" -i /etc/cron.d/pihole-updatelists
-	echo "Updated crontab command line to use /etc/pihole-updatelists/pihole-updatelists.conf config!"
+	sed "s_/usr/local/sbin/pihole-updatelists_/usr/local/sbin/pihole-updatelists --config=/etc/pihole/pihole-updatelists.conf_" -i /etc/cron.d/pihole-updatelists
+	echo "Updated crontab command line to use /etc/pihole/pihole-updatelists.conf config!"
 fi

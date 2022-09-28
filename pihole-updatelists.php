@@ -9,8 +9,8 @@
  */
 
 // A hash in case we're gonna force an update - f362448aaf23adbf8a900b3616a6719c
-define('GITHUB_LINK', 'https://github.com/jacklul/pihole-updatelists'); // Link to Github page
-define('GITHUB_LINK_RAW', 'https://raw.githubusercontent.com/jacklul/pihole-updatelists'); // URL serving raw files from the repository
+define('GITHUB_LINK', 'https://github.com/milindpatel63/pihole-updatelists'); // Link to Github page
+define('GITHUB_LINK_RAW', 'https://raw.githubusercontent.com/milindpatel63/pihole-updatelists'); // URL serving raw files from the repository
 
 /**
  * Print (and optionally log) string
@@ -1007,7 +1007,7 @@ function loadConfig(array $options = [])
 {
     // Default configuration
     $config = [
-        'CONFIG_FILE'             => '/etc/pihole-updatelists.conf',
+        'CONFIG_FILE'             => '/etc/pihole/pihole-updatelists.conf',
         'GRAVITY_DB'              => '/etc/pihole/gravity.db',
         'LOCK_FILE'               => '/var/lock/pihole-updatelists.lock',
         'LOG_FILE'                => '',
