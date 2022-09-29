@@ -141,9 +141,9 @@ else
 		echo "# Pi-hole's Lists Updater by Jack'lul
 # https://github.com/jacklul/pihole-updatelists
 
-#33 3 * * 6   root   /usr/bin/runitor -uuid=\"6c4e7360-c523-4e3a-859f-04db7c1b9d3d\" -api-url=\"https://hc-ping.com\" -api-retries=5 -api-timeout=\"10s\" -- /usr/local/sbin/pihole-updatelists
+33 3 * * 6   root   /usr/bin/runitor -uuid=\"6c4e7360-c523-4e3a-859f-04db7c1b9d3d\" -api-url=\"https://hc-ping.com\" -api-retries=5 -api-timeout=\"10s\" -- /usr/local/sbin/pihole-updatelists
 " > /etc/cron.d/pihole-updatelists
-		sed "s/#30 /$((1 + RANDOM % 58)) /" -i /etc/cron.d/pihole-updatelists
+		#sed "s/#30 /$((1 + RANDOM % 58)) /" -i /etc/cron.d/pihole-updatelists
 
 		echo "Created crontab (/etc/cron.d/pihole-updatelists)"
 	fi
