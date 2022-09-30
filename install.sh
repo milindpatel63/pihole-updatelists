@@ -146,6 +146,12 @@ else
 		#sed "s/#30 /$((1 + RANDOM % 58)) /" -i /etc/cron.d/pihole-updatelists
 
 		echo "Created crontab (/etc/cron.d/pihole-updatelists)"
+		echo "# Uptime Kuma Push to check dns every 120s
+
+*/2 * * * *   root   /etc/pihole/uptimekumapush.sh
+" > /etc/cron.d/uptimekumapush
+
+		echo "Created crontab (/etc/cron.d/uptimekumapush)"
 	fi
 fi
 
