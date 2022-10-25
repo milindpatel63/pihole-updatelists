@@ -148,7 +148,7 @@ else
 		echo "Created crontab (/etc/cron.d/pihole-updatelists)"
 		echo "# Uptime Kuma Push to check dns every 120s
 
-*/2 * * * *   root   /etc/pihole/uptimekumapush.sh
+*/5 * * * *   root   /etc/pihole/uptimekumapush.sh
 " > /etc/cron.d/uptimekumapush
 
 		echo "Created crontab (/etc/cron.d/uptimekumapush)"
