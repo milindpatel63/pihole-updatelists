@@ -26,7 +26,7 @@ _Alternatively you can clone this repo and `sudo bash install.sh`._
 
 If **systemd** is available this script will also add service and timer unit files to the system, otherwise a crontab entry in `/etc/cron.d/pihole-updatelists` will be created.
 
-If for some reasons the install script does not copy service and timer files while your distro has systemd scheduler available you can force the installation by passing `systemd` as a parameter to the install script - modifying the install command above with `sudo bash /dev/stdin systemd` instead.
+If for some reasons the install script does not copy service and timer files while your distro has systemd scheduler available you can force the installation by passing `systemd` as a parameter to the install script - modifying the install command above with `sudo bash -s systemd` instead.
 
 Note that in most cases you will be able to execute this script globally as `pihole-updatelists` command but some will require you to add `/usr/local/sbin` to `$PATH` or execute it via `/usr/local/sbin/pihole-updatelists`.
 
@@ -83,7 +83,7 @@ Alternatively, some manual work is required - pick one:
 
 ## Install with Docker
 
-Follow the [official instructions](https://hub.docker.com/r/pihole/pihole/) and add a volume for `/etc/pihole-updatelists/` directory.
+Follow the [official instructions](https://hub.docker.com/r/pihole/pihole/) but use `jacklul/pihole:latest` image instead, pass [configuration variables](#configuration) as environment variables in `docker-compose.yml`.
 
 If you need to pull a specific version of Pi-hole image you have no other choice but to use [custom Dockerfile](#using-official-image).
 
@@ -92,7 +92,7 @@ _You could also execute `/usr/bin/php /usr/local/sbin/pihole-updatelists --confi
 
 ### Using custom image
 
-Use [`jacklul/pihole:latest`](https://hub.docker.com/r/jacklul/pihole) image instead of `pihole/pihole:latest`.
+Use [`jacklul/pihole:latest`](https://hub.docker.com/r/jacklul/pihole) image instead of `pihole/pihole:latest`. [Version-specific tags](https://hub.docker.com/r/jacklul/pihole/tags) are also available but keep in mind they will contain version of the script that was available at the time of that particular version.
 
 ### Using official image
 
@@ -103,7 +103,7 @@ FROM pihole/pihole:latest
 
 RUN apt-get update && apt-get install -Vy wget php-cli php-sqlite3 php-intl php-curl
 
-RUN wget -O - https://raw.githubusercontent.com/jacklul/pihole-updatelists/master/install.sh | bash /dev/stdin docker
+RUN wget -O - https://raw.githubusercontent.com/jacklul/pihole-updatelists/master/install.sh | bash -s docker
 ```
 
 Then build your image locally and use that image in your `docker-composer.yml` or launch command line.
@@ -127,10 +127,16 @@ services:
       - "80:80/tcp"
     environment:
       TZ: 'America/Chicago'
+      ADLISTS_URL: 'https://v.firebog.net/hosts/lists.php?type=tick'
+      WHITELIST_URL: 'https://raw.githubusercontent.com/anudeepND/whitelist/master/domains/whitelist.txt'
+      #REGEX_WHITELIST_URL: ''
+      #BLACKLIST_URL: ''
+      REGEX_BLACKLIST_URL: 'https://raw.githubusercontent.com/mmotti/pihole-regex/master/regex.list'
     volumes:
       - './etc-pihole/:/etc/pihole/'
       - './etc-dnsmasq.d/:/etc/dnsmasq.d/'
-      - './etc-pihole-updatelists/:/etc/pihole-updatelists/'
+      # If you need advanced configuration create a mount to access the config file:
+      #- './etc-pihole-updatelists/:/etc/pihole-updatelists/'
     cap_add:
       - NET_ADMIN
     restart: unless-stopped
@@ -173,6 +179,15 @@ sudo nano /etc/pihole-updatelists.conf
 String values should be put between `" "`, otherwise weird things might happen.
 
 You can also give paths to the local files instead of URLs, for example setting `WHITELIST_URL` to `/home/pi/whitelist.txt` will fetch this file from filesystem.
+
+### Environment variables
+
+It is also possible to load configuration variables from the environment by using `--env` parameter - this will overwrite values in default section of the config file.
+
+**Some variables will have to be prefixed with `PHUL_` for compatibility:**
+```
+CONFIG_FILE, GRAVITY_DB, LOCK_FILE, LOG_FILE, VERBOSE, DEBUG, GIT_BRANCH
+```
 
 ### Multiple configurations
 
@@ -256,6 +271,7 @@ These can be used when executing `pihole-updatelists`.
 | `--verbose, -v` | Turn on verbose mode |
 | `--debug, -d`  | Turn on debug mode |
 | `--config=<file>` | Load alternative configuration file |
+| `--env, -e` | Load configuration from environment variables |
 | `--git-branch=<branch>` | Select git branch to pull remote checksum and update from <br>Can only be used with `--update` and `--version` |
 | `--update` | Update the script using selected git branch |
 | `--rollback` | Rollback script version to previous |
@@ -329,7 +345,7 @@ You can also add your comments directly through the Pi-hole's web interface by e
 ### Uninstalling
 
 ```bash
-wget -O - https://raw.githubusercontent.com/jacklul/pihole-updatelists/master/install.sh | sudo bash /dev/stdin uninstall
+wget -O - https://raw.githubusercontent.com/jacklul/pihole-updatelists/master/install.sh | sudo bash -s uninstall
 ```
 
 or remove files manually:

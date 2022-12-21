@@ -189,15 +189,20 @@ if [ ! -z \"\${SKIPGRAVITYONBOOT}\" ]; then
 elif [ ! -f \"\${gravityDBfile}\" ]; then
 	echo \"Lists update skipped - gravity database not found\"
 else
-	/usr/bin/php /usr/local/sbin/pihole-updatelists --config=/etc/pihole-updatelists/pihole-updatelists.conf --no-gravity --no-reload \${SCRIPT_ARGS} > /var/log/pihole-updatelists-onboot.log
+	/usr/bin/php /usr/local/sbin/pihole-updatelists --config=/etc/pihole-updatelists/pihole-updatelists.conf --env --no-gravity --no-reload \${SCRIPT_ARGS} > /var/log/pihole-updatelists-onboot.log
 fi
 " > /usr/local/bin/_updatelistsonboot.sh
 	chmod -v +x /usr/local/bin/_updatelistsonboot.sh
 	echo "Installed container service files!"
 
-	mkdir -pv /etc/s6-overlay/s6-rc.d/_gravityonboot/dependencies.d
-	echo "" > /etc/s6-overlay/s6-rc.d/_gravityonboot/dependencies.d/_updatelistsonboot
-	echo "Added dependency to _gravityonboot service (/etc/s6-overlay/s6-rc.d/_gravityonboot/dependencies.d/_updatelistsonboot)!"
+	if [ ! -d "/etc/s6-overlay/s6-rc.d/_postFTL" ]; then
+		echo "Missing /etc/s6-overlay/s6-rc.d/_postFTL directory"
+		exit 1
+	fi
+	
+	mkdir -pv /etc/s6-overlay/s6-rc.d/_postFTL/dependencies.d
+	echo "" > /etc/s6-overlay/s6-rc.d/_postFTL/dependencies.d/_updatelistsonboot
+	echo "Added dependency to _postFTL service (/etc/s6-overlay/s6-rc.d/_postFTL/dependencies.d/_updatelistsonboot)!"
 
 	sed "s_/usr/local/sbin/pihole-updatelists_/usr/local/sbin/pihole-updatelists --config=/etc/pihole/pihole-updatelists.conf_" -i /etc/cron.d/pihole-updatelists
 	echo "Updated crontab command line to use /etc/pihole/pihole-updatelists.conf config!"
