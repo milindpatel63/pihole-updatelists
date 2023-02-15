@@ -83,12 +83,6 @@ function checkDependencies()
         exit(1);
     }
 
-    // These functions should be available but might be disabled by the user
-    if ((!function_exists('posix_getuid') || !function_exists('posix_kill')) && empty(getenv('IGNORE_OS_CHECK'))) {
-        printAndLog('Make sure PHP\'s functions \'posix_getuid\' and \'posix_kill\' are available!' . PHP_EOL, 'ERROR');
-        exit(1);
-    }
-
     // Check for required PHP extensions
     $extensions = [
         'pdo',
@@ -224,9 +218,21 @@ function getDefinedOptions()
  */
 function requireRoot()
 {
-    if (function_exists('posix_getuid') && posix_getuid() !== 0 && strpos(basename($_SERVER['argv'][0]), '.php') === false) {
-        passthru('sudo ' . implode(' ', $_SERVER['argv']), $return);
-        exit($return);
+    global $isRoot;
+
+    if (!isset($isRoot) || $isRoot === null) {
+        $isRoot = null;
+
+        if (function_exists('posix_getuid')) {
+            $isRoot = posix_getuid() === 0;
+        } else {
+            $isRoot = shell_exec('whoami') === 'root';
+        }
+    }
+    
+    if (!$isRoot && strpos(basename($_SERVER['argv'][0]), '.php') === false) {
+        print 'root privileges required' . PHP_EOL;
+        exit(1);
     }
 }
 
@@ -860,11 +866,14 @@ function updateScript(array $options = [], array $config = [])
         print 'See changes in commit history - https://github.com/jacklul/pihole-updatelists/commits/' . $branch . PHP_EOL . PHP_EOL;
 
         if (isset($options['yes']) || isset($options['force']) || expectUserInput('Update now? [Y/N]', ['y', 'yes'])) {
+            $script_md5 = md5_file(__FILE__);
+            
             print 'Downloading and running install script from "' . GITHUB_LINK_RAW . '/' . $branch . '/install.sh"...' . PHP_EOL . PHP_EOL;
-
             passthru('wget -nv -O - ' . GITHUB_LINK_RAW . '/' . $branch . '/install.sh | sudo bash /dev/stdin ' . $branch, $return);
 
-            if ($return === 0 && file_exists('/usr/local/sbin/pihole-updatelists.old')) {
+            clearstatcache();
+
+            if (file_exists('/var/tmp/pihole-updatelists.old') && $script_md5 != md5_file(__FILE__)) {
                 print PHP_EOL . 'Use "' . basename(__FILE__) . ' --rollback" to return to the previous script version!' . PHP_EOL;
             }
 
@@ -888,12 +897,12 @@ function rollbackScript(array $options = [], array $config = [])
         exit(1);
     }
 
-    if (!file_exists('/usr/local/sbin/pihole-updatelists.old')) {
+    if (!file_exists('/var/tmp/pihole-updatelists.old')) {
         print 'Backup file does not exist, unable to rollback!' . PHP_EOL;
         exit(1);
     }
 
-    if (md5_file('/usr/local/sbin/pihole-updatelists') === md5_file('/usr/local/sbin/pihole-updatelists.old')) {
+    if (md5_file('/usr/local/sbin/pihole-updatelists') === md5_file('/var/tmp/pihole-updatelists.old')) {
         print 'Current script checksum matches checksum of the backup, unable to rollback!' . PHP_EOL;
         exit(1);
     }
@@ -901,7 +910,7 @@ function rollbackScript(array $options = [], array $config = [])
     requireRoot(); // Only root should be able to run this command
 
     if (isset($options['yes']) || expectUserInput('Are you sure you want to rollback? [Y/N]', ['y', 'yes'])) {
-        if (rename('/usr/local/sbin/pihole-updatelists.old', '/usr/local/sbin/pihole-updatelists') && chmod('/usr/local/sbin/pihole-updatelists', 0755)) {
+        if (rename('/var/tmp/pihole-updatelists.old', '/usr/local/sbin/pihole-updatelists') && chmod('/usr/local/sbin/pihole-updatelists', 0755)) {
             print 'Successfully rolled back the script!' . PHP_EOL;
             exit;
         }
