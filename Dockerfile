@@ -1,6 +1,6 @@
 FROM pihole/pihole:latest
 
-COPY install.sh pihole-updatelists.* /tmp/pihole-updatelists/
+COPY install.sh docker.sh pihole-updatelists.* /tmp/pihole-updatelists/
 
 COPY runitor /usr/bin/runitor
 

@@ -13,9 +13,9 @@ function reloadSystemd() {
 SPATH=$(dirname "$0") # Path to the script
 REMOTE_URL=https://raw.githubusercontent.com/milindpatel63/pihole-updatelists # Remote URL that serves raw files from the repository
 GIT_BRANCH=master # Git branch to use, user can specify custom branch as first argument
-SYSTEMD=`pidof systemd >/dev/null && echo "1" || echo "0"` # Is systemd available?
-SYSTEMD_INSTALLED=`[ -f "/etc/systemd/system/pihole-updatelists.timer" ] && echo "1" || echo "0"` # Is systemd timer installed already?
-DOCKER=`[ "$(cat /proc/1/cgroup | grep "docker")" == "" ] && echo "0" || echo "1"` # Is this a Docker installation?
+SYSTEMD=$(pidof systemd >/dev/null && echo "1" || echo "0") # Is systemd available?
+SYSTEMD_INSTALLED=$([ -f "/etc/systemd/system/pihole-updatelists.timer" ] && echo "1" || echo "0") # Is systemd timer installed already?
+DOCKER=$([ "$(grep "docker" < /proc/1/cgroup)" == "" ] && echo "0" || echo "1") # Is this a Docker installation?
 
 if [ "$1" == "uninstall" ]; then	# Simply remove the files and reload systemd (if available)
 	rm -v /usr/local/sbin/pihole-updatelists
@@ -42,8 +42,7 @@ elif [ "$1" == "crontab" ]; then # Force crontab installation
 elif [ "$1" != "" ]; then	# Install using different branch
 	GIT_BRANCH=$1
 
-	wget -q --spider "$REMOTE_URL/$GIT_BRANCH/install.sh"
-	if [ $? -ne 0 ] ; then
+	if ! wget -q --spider "$REMOTE_URL/$GIT_BRANCH/install.sh" ; then
 		echo "Invalid branch: ${GIT_BRANCH}"
 		exit 1
 	fi
@@ -56,7 +55,7 @@ fi
 
 # We require some stuff before continuing
 command -v php >/dev/null 2>&1 || { echo "This script requires PHP-CLI to run, install it with 'sudo apt install php-cli'."; exit 1; }
-[[ $(php -v | head -n 1 | cut -d " " -f 2 | cut -f1 -d".") < 7 ]] && { echo "Detected PHP version lower than 7.0, make sure php-cli package is up to date!"; exit 1; }
+[[ $(php -v | head -n 1 | cut -d " " -f 2 | cut -f1 -d".") -lt 7 ]] && { echo "Detected PHP version lower than 7.0, make sure php-cli package is up to date!"; exit 1; }
 
 # Use local files when possible, otherwise install from remote repository
 if \
@@ -75,19 +74,19 @@ if \
 		fi
 	fi
 
-	cp -v $SPATH/pihole-updatelists.php /usr/local/sbin/pihole-updatelists && \
+	cp -v "$SPATH/pihole-updatelists.php" /usr/local/sbin/pihole-updatelists && \
 	chmod -v +x /usr/local/sbin/pihole-updatelists
 	
-	if [ ! -f "/etc/pihole/pihole-updatelists.conf" ]; then
-		cp -v $SPATH/pihole-updatelists.conf /etc/pihole/pihole-updatelists.conf
+	if [ ! -f "/etc/pihole-updatelists.conf" ]; then
+		cp -v "$SPATH/pihole-updatelists.conf" /etc/pihole-updatelists.conf
 	fi
 
 	if [ "$SYSTEMD" == 1 ]; then
-		cp -v $SPATH/pihole-updatelists.service /etc/systemd/system
-		cp -v $SPATH/pihole-updatelists.timer /etc/systemd/system
+		cp -v "$SPATH/pihole-updatelists.service" /etc/systemd/system
+		cp -v "$SPATH/pihole-updatelists.timer" /etc/systemd/system
 	fi
 
-	cp -v $SPATH/pihole-updatelists.bash /etc/bash_completion.d/pihole-updatelists
+	cp -v "$SPATH/pihole-updatelists.bash" /etc/bash_completion.d/pihole-updatelists
 
 	# Convert line endings when dos2unix command is available
 	command -v dos2unix >/dev/null 2>&1 && dos2unix /usr/local/sbin/pihole-updatelists
@@ -110,6 +109,10 @@ elif [ "$REMOTE_URL" != "" ] && [ "$GIT_BRANCH" != "" ]; then
 
 	if [ ! -f "/etc/pihole/pihole-updatelists.conf" ]; then
 		wget -nv -O /etc/pihole/pihole-updatelists.conf "$REMOTE_URL/$GIT_BRANCH/pihole-updatelists.conf"
+	fi
+
+	if [ ! -f "/etc/pihole-updatelists.conf" ]; then
+		wget -nv -O /etc/pihole-updatelists.conf "$REMOTE_URL/$GIT_BRANCH/pihole-updatelists.conf"
 	fi
 
 	if [ "$SYSTEMD" == 1 ]; then
@@ -161,53 +164,33 @@ fi
 
 # Docker-related tasks
 if [ "$DOCKER" == 1 ]; then
-	mkdir -v /etc/pihole-updatelists
-	mkdir -v /etc/s6-overlay/s6-rc.d/_updatelistsonboot
-	mkdir -v /etc/s6-overlay/s6-rc.d/_updatelistsonboot/dependencies.d
-
-	echo "" > /etc/s6-overlay/s6-rc.d/_updatelistsonboot/dependencies.d/pihole-FTL
-	echo "oneshot" > /etc/s6-overlay/s6-rc.d/_updatelistsonboot/type
-	echo "#!/command/execlineb
-background { bash -e /usr/local/bin/_updatelistsonboot.sh }" > /etc/s6-overlay/s6-rc.d/_updatelistsonboot/up
-
-	echo "#!/bin/bash
-
-gravityDBfile=\"/etc/pihole/gravity.db\"
-
-if [ \"\${PH_VERBOSE:-0}\" -gt 0 ]; then
-	set -x
-	SCRIPT_ARGS=\"--verbose --debug\"
-fi
-
-if [ ! -f \"/etc/pihole-updatelists/pihole-updatelists.conf\" ]; then
-	cp -v /etc/pihole/pihole-updatelists.conf /etc/pihole-updatelists/pihole-updatelists.conf
-fi
-
-chown -v root:root /etc/pihole-updatelists/*
-chown -v root:root /etc/pihole/pihole-updatelists.conf
-chmod -v 644 /etc/pihole-updatelists/*
-chmod -v 644 /etc/pihole/pihole-updatelists.conf
-
-if [ ! -z \"\${SKIPGRAVITYONBOOT}\" ]; then
-	echo \"Lists update skipped - SKIPGRAVITYONBOOT=true\"
-elif [ ! -f \"\${gravityDBfile}\" ]; then
-	echo \"Lists update skipped - gravity database not found\"
-else
-	/usr/bin/php /usr/local/sbin/pihole-updatelists --config=/etc/pihole-updatelists/pihole-updatelists.conf --env --no-gravity --no-reload \${SCRIPT_ARGS} > /var/log/pihole-updatelists-onboot.log
-fi
-" > /usr/local/bin/_updatelistsonboot.sh
-	chmod -v +x /usr/local/bin/_updatelistsonboot.sh
-	echo "Installed container service files!"
-
-	if [ ! -d "/etc/s6-overlay/s6-rc.d/_postFTL" ]; then
-		echo "Missing /etc/s6-overlay/s6-rc.d/_postFTL directory"
-		exit 1
-	fi
+	[ ! -d "/etc/s6-overlay/s6-rc.d/_postFTL" ] && { echo "Missing /etc/s6-overlay/s6-rc.d/_postFTL directory!"; exit 1; }
+	[ ! -f "/usr/local/bin/_postFTL.sh" ] && { echo "Missing /usr/local/bin/_postFTL.sh file!"; exit 1; }
 	
-	mkdir -pv /etc/s6-overlay/s6-rc.d/_postFTL/dependencies.d
-	echo "" > /etc/s6-overlay/s6-rc.d/_postFTL/dependencies.d/_updatelistsonboot
-	echo "Added dependency to _postFTL service (/etc/s6-overlay/s6-rc.d/_postFTL/dependencies.d/_updatelistsonboot)!"
+	mkdir -v /etc/pihole-updatelists
+	
+	if [ -f "$SPATH/docker.sh" ]; then
+		cp -v "$SPATH/docker.sh" /usr/local/bin/_updatelists.sh
+	elif [ "$REMOTE_URL" != "" ]; then
+		wget -nv -O /usr/local/bin/_updatelists.sh "$REMOTE_URL/$GIT_BRANCH/docker.sh"
+	else
+		echo "Missing required file (docker.sh) for installation!"
+	fi
 
-	sed "s_/usr/local/sbin/pihole-updatelists_/usr/local/sbin/pihole-updatelists --config=/etc/pihole/pihole-updatelists.conf_" -i /etc/cron.d/pihole-updatelists
-	echo "Updated crontab command line to use /etc/pihole/pihole-updatelists.conf config!"
+	chmod -v +x /usr/local/bin/_updatelists.sh
+
+	echo "#!/command/execlineb" > /etc/s6-overlay/s6-rc.d/_postFTL/up
+    echo "background { bash -ec \"/usr/local/bin/_updatelists.sh && /usr/local/bin/_postFTL.sh\" }" >> /etc/s6-overlay/s6-rc.d/_postFTL/up
+	echo "Modified \"/etc/s6-overlay/s6-rc.d/_postFTL/up\" to launch pihole-updatelists first!"
+
+	sed "s_/usr/local/sbin/pihole-updatelists_/usr/local/sbin/pihole-updatelists --config=/etc/pihole-updatelists/pihole-updatelists.conf_" -i /etc/cron.d/pihole-updatelists
+	echo "Updated crontab command line in \"/etc/cron.d/pihole-updatelists\"!"
+
+	if [ "$(grep 'pihole updateGravity' < /etc/cron.d/pihole | cut -c1-1)" != "#" ]; then
+		sed -e '/pihole updateGravity/ s/^#*/#/' -i /etc/cron.d/pihole
+		echo "Disabled default gravity update schedule in \"/etc/cron.d/pihole\""
+	fi
+
+	echo "alias pihole-updatelists='/usr/local/sbin/pihole-updatelists --config=/etc/pihole-updatelists/pihole-updatelists.conf --env'" >> /root/.bashrc
+	echo "Created alias for pihole-updatelists command in \"/root/.bashrc\""
 fi
