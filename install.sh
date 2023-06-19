@@ -85,6 +85,10 @@ if \
 		cp -v "$SPATH/pihole-updatelists.service" /etc/systemd/system
 		cp -v "$SPATH/pihole-updatelists.timer" /etc/systemd/system
 	fi
+	
+	if [ ! -d "/etc/bash_completion.d" ]; then
+		mkdir -vp /etc/bash_completion.d
+	fi
 
 	cp -v "$SPATH/pihole-updatelists.bash" /etc/bash_completion.d/pihole-updatelists
 
@@ -118,6 +122,10 @@ elif [ "$REMOTE_URL" != "" ] && [ "$GIT_BRANCH" != "" ]; then
 	if [ "$SYSTEMD" == 1 ]; then
 		wget -nv -O /etc/systemd/system/pihole-updatelists.service "$REMOTE_URL/$GIT_BRANCH/pihole-updatelists.service"
 		wget -nv -O /etc/systemd/system/pihole-updatelists.timer "$REMOTE_URL/$GIT_BRANCH/pihole-updatelists.timer"
+	fi
+
+	if [ ! -d "/etc/bash_completion.d" ]; then
+		mkdir -vp /etc/bash_completion.d
 	fi
 
 	wget -nv -O /etc/bash_completion.d/pihole-updatelists "$REMOTE_URL/$GIT_BRANCH/pihole-updatelists.bash"
@@ -180,17 +188,9 @@ if [ "$DOCKER" == 1 ]; then
 	chmod -v +x /usr/local/bin/_updatelists.sh
 
 	echo "#!/command/execlineb" > /etc/s6-overlay/s6-rc.d/_postFTL/up
-    echo "background { bash -ec \"/usr/local/bin/_updatelists.sh && /usr/local/bin/_postFTL.sh\" }" >> /etc/s6-overlay/s6-rc.d/_postFTL/up
-	echo "Modified \"/etc/s6-overlay/s6-rc.d/_postFTL/up\" to launch pihole-updatelists first!"
-
-	sed "s_/usr/local/sbin/pihole-updatelists_/usr/local/sbin/pihole-updatelists --config=/etc/pihole-updatelists/pihole-updatelists.conf_" -i /etc/cron.d/pihole-updatelists
-	echo "Updated crontab command line in \"/etc/cron.d/pihole-updatelists\"!"
-
-	if [ "$(grep 'pihole updateGravity' < /etc/cron.d/pihole | cut -c1-1)" != "#" ]; then
-		sed -e '/pihole updateGravity/ s/^#*/#/' -i /etc/cron.d/pihole
-		echo "Disabled default gravity update schedule in \"/etc/cron.d/pihole\""
-	fi
+	echo "background { bash -ec \"/usr/local/bin/_updatelists.sh && /usr/local/bin/_postFTL.sh\" }" >> /etc/s6-overlay/s6-rc.d/_postFTL/up
+	echo "Modified /etc/s6-overlay/s6-rc.d/_postFTL/up to launch pihole-updatelists first!"
 
 	echo "alias pihole-updatelists='/usr/local/sbin/pihole-updatelists --config=/etc/pihole-updatelists/pihole-updatelists.conf --env'" >> /root/.bashrc
-	echo "Created alias for pihole-updatelists command in \"/root/.bashrc\""
+	echo "Created alias for pihole-updatelists command in /root/.bashrc"
 fi

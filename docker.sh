@@ -14,18 +14,32 @@ fi
 
 # Recreate the config file if it is missing
 if [ ! -f "/etc/pihole-updatelists/pihole-updatelists.conf" ]; then
-	cp -v /etc/pihole-updatelists.conf /etc/pihole-updatelists/pihole-updatelists.conf
+	cp /etc/pihole-updatelists.conf /etc/pihole-updatelists/pihole-updatelists.conf
+	echo "Created /etc/pihole-updatelists/pihole-updatelists.conf"
 fi
 
 # Fix permissions (when config directory is mounted as a volume)
-chown -v root:root /etc/pihole-updatelists/*
-chmod -v 644 /etc/pihole-updatelists/*
+chown root:root /etc/pihole-updatelists/*
+chmod 644 /etc/pihole-updatelists/*
+
+# Disable default gravity update schedule
+if [ "$(grep 'pihole updateGravity' < /etc/cron.d/pihole | cut -c1-1)" != "#" ]; then
+	sed -e '/pihole updateGravity/ s/^#*/#/' -i /etc/cron.d/pihole
+	echo "Disabled default gravity update schedule in /etc/cron.d/pihole"
+fi
+
+# Create new schedule with random time
+echo "#30 3 * * 6   root   /usr/bin/php /usr/local/sbin/pihole-updatelists --config=/etc/pihole-updatelists/pihole-updatelists.conf" > /etc/cron.d/pihole-updatelists
+sed "s/#30 /$((1 + RANDOM % 58)) /" -i /etc/cron.d/pihole-updatelists
 
 if [ -n "$SKIPGRAVITYONBOOT" ]; then
 	echo "Lists update skipped - SKIPGRAVITYONBOOT=true"
-elif [ ! -f "/etc/pihole/gravity.db" ]; then
-	echo "Lists update skipped - gravity database not found"
 else
+	if [ ! -f "/etc/pihole/gravity.db" ]; then
+		echo "Gravity database not found - running 'pihole -g' command..."
+		pihole -g
+	fi
+
 	if [ -z "$(printenv PHUL_LOG_FILE)" ]; then
 		export PHUL_LOG_FILE="-/var/log/pihole-updatelists-boot.log"
 	fi
