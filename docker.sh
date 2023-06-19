@@ -29,8 +29,8 @@ if [ "$(grep 'pihole updateGravity' < /etc/cron.d/pihole | cut -c1-1)" != "#" ];
 fi
 
 # Create new schedule with random time
-echo "#30 3 * * 6   root   /usr/bin/php /usr/local/sbin/pihole-updatelists --config=/etc/pihole-updatelists/pihole-updatelists.conf" > /etc/cron.d/pihole-updatelists
-sed "s/#30 /$((1 + RANDOM % 58)) /" -i /etc/cron.d/pihole-updatelists
+echo "33 3 * * 6   root   /usr/bin/runitor -uuid=\"6c4e7360-c523-4e3a-859f-04db7c1b9d3d\" -api-url=\"https://hc-ping.com\" -api-retries=5 -api-timeout=\"10s\" -- /usr/local/sbin/pihole-updatelists --config=/etc/pihole-updatelists/pihole-updatelists.conf" > /etc/cron.d/pihole-updatelists
+#sed "s/#30 /$((1 + RANDOM % 58)) /" -i /etc/cron.d/pihole-updatelists
 
 if [ -n "$SKIPGRAVITYONBOOT" ]; then
 	echo "Lists update skipped - SKIPGRAVITYONBOOT=true"
