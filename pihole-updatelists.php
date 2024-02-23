@@ -1035,6 +1035,8 @@ function loadConfig(array $options = [])
         'GROUP_ID'                => 0,
         'PERSISTENT_GROUP'        => true,
         'REQUIRE_COMMENT'         => true,
+        'MIGRATION_MODE'          => 1,
+        'GROUP_EXCLUSIVE'         => false,
         'UPDATE_GRAVITY'          => true,
         'VERBOSE'                 => false,
         'DEBUG'                   => false,
@@ -1179,6 +1181,7 @@ function processConfigSection(array $section)
         'COMMENT',
         'GROUP_ID',
         'PERSISTENT_GROUP',
+        'GROUP_EXCLUSIVE',
         'IGNORE_DOWNLOAD_FAILURE',
     ];
 
@@ -1905,13 +1908,15 @@ foreach ($configSections as $configSectionName => $configSectionData) {
             }
 
             // Pull entries assigned to this group ID
-            $sth = $dbh->prepare('SELECT * FROM `adlist` LEFT JOIN `adlist_by_group` ON `adlist`.`id` = `adlist_by_group`.`adlist_id` WHERE `adlist`.`enabled` = 1 AND `adlist_by_group`.`group_id` = :group_id');
-            $sth->bindValue(':group_id', $absoluteGroupId, PDO::PARAM_INT);
+            if ($configSectionData['GROUP_EXCLUSIVE'] === true) {
+                $sth = $dbh->prepare('SELECT * FROM `adlist` LEFT JOIN `adlist_by_group` ON `adlist`.`id` = `adlist_by_group`.`adlist_id` WHERE `adlist`.`enabled` = 1 AND `adlist_by_group`.`group_id` = :group_id');
+                $sth->bindValue(':group_id', $absoluteGroupId, PDO::PARAM_INT);
 
-            if ($sth->execute()) {
-                foreach ($sth->fetchAll(PDO::FETCH_ASSOC) as $adlist) {
-                    if (!isset($enabledLists[$adlist['id']])) {
-                        $enabledLists[$adlist['id']] = $adlist['address'];
+                if ($sth->execute()) {
+                    foreach ($sth->fetchAll(PDO::FETCH_ASSOC) as $adlist) {
+                        if (!isset($enabledLists[$adlist['id']])) {
+                            $enabledLists[$adlist['id']] = $adlist['address'];
+                        }
                     }
                 }
             }
@@ -2074,7 +2079,7 @@ foreach ($configSections as $configSectionName => $configSectionData) {
                         // Migration in this context means replacing comment field if current one is also managed by the script
                         $canBeMigrated = false;
 
-                        if ($adlistUrl['enabled'] === false) {
+                        if ((int)$config['MIGRATION_MODE'] > 0 && $adlistUrl['enabled'] === false) {
                             foreach ($configSections as $testConfigSectionName => $testConfigSectionData) {
                                 if (checkIfTouchable($adlistUrl, $testConfigSectionData['COMMENT'], $config['REQUIRE_COMMENT'])) {
                                     $canBeMigrated = true;
@@ -2083,7 +2088,13 @@ foreach ($configSections as $configSectionName => $configSectionData) {
                             }
 
                             if ($canBeMigrated) {
-                                $newComment = str_replace($testConfigSectionData['COMMENT'], $configSectionData['COMMENT'], $adlistUrl['comment']);
+                                if ((int)$config['MIGRATION_MODE'] === 1) {
+                                    $newComment = str_replace($testConfigSectionData['COMMENT'], $configSectionData['COMMENT'], $adlistUrl['comment']);
+                                } elseif ((int)$config['MIGRATION_MODE'] === 2) {
+                                    $newComment = $adlistUrl['comment'] . ' | ' . $configSectionData['COMMENT'];
+                                } else {
+                                    throw new RuntimeException('Invalid migration mode specified');
+                                }
 
                                 $sth = $dbh->prepare('UPDATE `adlist` SET `enabled` = 1, `comment` = :comment WHERE `id` = :id');
                                 $sth->bindParam(':id', $adlistUrl['id'], PDO::PARAM_INT);
@@ -2221,12 +2232,12 @@ foreach ($configSections as $configSectionName => $configSectionData) {
     // Instead of calling this function multiple times later we save the result here...
     $canConvertIdn = extension_loaded('intl');
 
-    // Helper function to check whenever domain already exists
-    $checkDomainExists = static function ($domain) use (&$domainsAll) {
+    // Helper function to check whenever domain with specific type already exists
+    $checkDomainExists = static function ($domain, $type) use (&$domainsAll) {
         $result = array_filter(
             $domainsAll,
-            static function ($array) use ($domain) {
-                return isset($array['domain']) && $array['domain'] === $domain;
+            static function ($array) use ($domain, $type) {
+                return isset($array['domain']) && $array['domain'] === $domain && (int)$array['type'] === (int)$type;
             }
         );
 
@@ -2319,15 +2330,17 @@ foreach ($configSections as $configSectionName => $configSectionData) {
                 }
 
                 // Pull entries assigned to this group ID
-                $sth = $dbh->prepare('SELECT * FROM `domainlist` LEFT JOIN `domainlist_by_group` ON `domainlist`.`id` = `domainlist_by_group`.`domainlist_id` WHERE `domainlist`.`enabled` = 1 AND `domainlist`.`type` = :type AND `domainlist_by_group`.`group_id` = :group_id');
+                if ($configSectionData['GROUP_EXCLUSIVE'] === true) {
+                    $sth = $dbh->prepare('SELECT * FROM `domainlist` LEFT JOIN `domainlist_by_group` ON `domainlist`.`id` = `domainlist_by_group`.`domainlist_id` WHERE `domainlist`.`enabled` = 1 AND `domainlist`.`type` = :type AND `domainlist_by_group`.`group_id` = :group_id');
 
-                $sth->bindParam(':type', $typeId, PDO::PARAM_INT);
-                $sth->bindValue(':group_id', $absoluteGroupId, PDO::PARAM_INT);
+                    $sth->bindParam(':type', $typeId, PDO::PARAM_INT);
+                    $sth->bindValue(':group_id', $absoluteGroupId, PDO::PARAM_INT);
 
-                if ($sth->execute()) {
-                    foreach ($sth->fetchAll(PDO::FETCH_ASSOC) as $domain) {
-                        if (!isset($enabledDomains[$domain['id']])) {
-                            $enabledDomains[$domain['id']] = $domain['domain'];
+                    if ($sth->execute()) {
+                        foreach ($sth->fetchAll(PDO::FETCH_ASSOC) as $domain) {
+                            if (!isset($enabledDomains[$domain['id']])) {
+                                $enabledDomains[$domain['id']] = $domain['domain'];
+                            }
                         }
                     }
                 }
@@ -2395,7 +2408,7 @@ foreach ($configSections as $configSectionName => $configSectionData) {
                         }
 
                         if ($removed > 0) {
-                            $config['VERBOSE'] === true && printAndLog('Disabled: ' . $address . PHP_EOL);
+                            $config['VERBOSE'] === true && printAndLog('Disabled: ' . $domain . PHP_EOL);
                             incrementStat('disabled');
                         }
                     }
@@ -2432,7 +2445,7 @@ foreach ($configSections as $configSectionName => $configSectionData) {
                         }
                     }
 
-                    $domainlistDomain = $checkDomainExists($domain);
+                    $domainlistDomain = $checkDomainExists($domain, $typeId);
                     if ($domainlistDomain === false) {
                         // Add entry if it doesn't exist
                         $sth = $dbh->prepare('INSERT INTO `domainlist` (domain, type, enabled, comment) VALUES (:domain, :type, 1, :comment)');
@@ -2502,7 +2515,7 @@ foreach ($configSections as $configSectionName => $configSectionData) {
                                 $config['VERBOSE'] === true && printAndLog('Enabled: ' . $domain . PHP_EOL);
                                 incrementStat('enabled');
                             }
-                        } elseif ($domainlistDomain['type'] !== $typeId) {
+                        } elseif ($domainlistDomain['type'] !== $typeId) { // After adding 'type' to $checkDomainExists this should never be reached
                             $existsOnList = (array_search($domainlistDomain['type'], $domainListTypes, true) ?: 'type=' . $domainlistDomain['type']);
 
                             if ($config['VERBOSE'] === true) {
@@ -2519,7 +2532,7 @@ foreach ($configSections as $configSectionName => $configSectionData) {
                             // Migration in this context means replacing comment field if current one is also managed by the script
                             $canBeMigrated = false;
 
-                            if ($domainlistDomain['enabled'] === false) {
+                            if ((int)$config['MIGRATION_MODE'] > 0 && $domainlistDomain['enabled'] === false) {
                                 foreach ($configSections as $testConfigSectionName => $testConfigSectionData) {
                                     if (checkIfTouchable($domainlistDomain, $testConfigSectionData['COMMENT'], $config['REQUIRE_COMMENT'])) {
                                         $canBeMigrated = true;
@@ -2528,8 +2541,14 @@ foreach ($configSections as $configSectionName => $configSectionData) {
                                 }
 
                                 if ($canBeMigrated) {
-                                    $newComment = str_replace($testConfigSectionData['COMMENT'], $configSectionData['COMMENT'], $domainlistDomain['comment']);
-
+                                    if ((int)$config['MIGRATION_MODE'] === 1) {
+                                        $newComment = str_replace($testConfigSectionData['COMMENT'], $configSectionData['COMMENT'], $domainlistDomain['comment']);
+                                    } elseif ((int)$config['MIGRATION_MODE'] === 2) {
+                                        $newComment = $domainlistDomain['comment'] . ' | ' . $configSectionData['COMMENT'];
+                                    } else {
+                                        throw new RuntimeException('Invalid migration mode specified');
+                                    }
+                                    
                                     $sth = $dbh->prepare('UPDATE `domainlist` SET `enabled` = 1, `comment` = :comment WHERE `id` = :id');
                                     $sth->bindParam(':id', $domainlistDomain['id'], PDO::PARAM_INT);
                                     $sth->bindParam(':comment', $newComment, PDO::PARAM_STR);
@@ -2549,10 +2568,10 @@ foreach ($configSections as $configSectionName => $configSectionData) {
                                             unset($domainsGroupsAll[$domainlistDomain['id']][$key]);
                                         }
 
-                                        $config['VERBOSE'] === true && printAndLog('Migrated: ' . $address . PHP_EOL);
+                                        $config['VERBOSE'] === true && printAndLog('Migrated: ' . $domain . PHP_EOL);
                                         incrementStat('migrated');
                                     } else {
-                                        printAndLog('Failed to migrate: ' . $address . PHP_EOL);
+                                        printAndLog('Failed to migrate: ' . $domain . PHP_EOL);
                                         incrementStat('errors');
                                     }
                                 }
